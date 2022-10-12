@@ -82,11 +82,12 @@ func NewClickHouse(params *ClickHouseParams) (base.Storage, error) {
 	queries = append(queries, fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, database))
 
 	queries = append(queries, fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s.samples_v2 (
+		CREATE TABLE IF NOT EXISTS %s.samples_v2_json_string (
 			metric_name LowCardinality(String),
 			fingerprint UInt64 Codec(DoubleDelta, LZ4),
 			timestamp_ms Int64 Codec(DoubleDelta, LZ4),
-			value Float64 Codec(Gorilla, LZ4)
+			value Float64 Codec(Gorilla, LZ4),
+			labels String Codec(ZSTD(2))
 		)
 		ENGINE = MergeTree
 			PARTITION BY toDate(timestamp_ms / 1000)
@@ -304,18 +305,21 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 	err = func() error {
 		ctx := context.Background()
 
-		statement, err := ch.conn.PrepareBatch(ctx, fmt.Sprintf("INSERT INTO %s.samples_v2", ch.database))
+		statement, err := ch.conn.PrepareBatch(ctx, fmt.Sprintf("INSERT INTO %s.samples_v2_json_string", ch.database))
 		if err != nil {
 			return err
 		}
 		for i, ts := range data.Timeseries {
 			fingerprint := fingerprints[i]
+			labels := timeSeries[fingerprint]
+			encodedLabels := string(marshalLabels(labels, make([]byte, 0, 128)))
 			for _, s := range ts.Samples {
 				err = statement.Append(
 					fingerprintToName[fingerprint],
 					fingerprint,
 					s.Timestamp,
 					s.Value,
+					encodedLabels,
 				)
 				if err != nil {
 					return err
