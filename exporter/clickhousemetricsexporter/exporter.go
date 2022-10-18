@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/pkg/errors"
 	"go.uber.org/multierr"
@@ -121,6 +122,7 @@ func (prwe *PrwExporter) PushMetrics(ctx context.Context, md pmetric.Metrics) er
 	case <-prwe.closeChan:
 		return errors.New("shutdown has been called")
 	default:
+		start := time.Now()
 		tsMap := map[string]*prompb.TimeSeries{}
 		dropped := 0
 		var errs error
@@ -211,6 +213,7 @@ func (prwe *PrwExporter) PushMetrics(ctx context.Context, md pmetric.Metrics) er
 			errs = multierr.Append(errs, multierr.Combine(exportErrors...))
 		}
 
+		fmt.Printf("PushMetrics took %s", time.Since(start))
 		if dropped != 0 {
 			return errs
 		}
@@ -250,6 +253,7 @@ func (prwe *PrwExporter) addNumberDataPointSlice(dataPoints pmetric.NumberDataPo
 
 // export sends a Snappy-compressed WriteRequest containing TimeSeries to a remote write endpoint in order
 func (prwe *PrwExporter) export(ctx context.Context, tsMap map[string]*prompb.TimeSeries) []error {
+	start := time.Now()
 	var errs []error
 	// Calls the helper function to convert and batch the TsMap to the desired format
 	requests, err := batchTimeSeries(tsMap, maxBatchByteSize)
@@ -287,6 +291,7 @@ func (prwe *PrwExporter) export(ctx context.Context, tsMap map[string]*prompb.Ti
 		}()
 	}
 	wg.Wait()
+	fmt.Printf("Exporting %d TimeSeries took %s", len(tsMap), time.Since(start))
 
 	return errs
 }

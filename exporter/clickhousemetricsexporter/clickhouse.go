@@ -226,6 +226,7 @@ func (ch *clickHouse) Collect(c chan<- prometheus.Metric) {
 }
 
 func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) error {
+	start := time.Now()
 	// calculate fingerprints, map them to time series
 	fingerprints := make([]uint64, len(data.Timeseries))
 	timeSeries := make(map[uint64][]*prompb.Label, len(data.Timeseries))
@@ -339,6 +340,7 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 		ch.mWrittenTimeSeries.Add(float64(n))
 		ch.l.Debugf("Wrote %d new time series.", n)
 	}
+	ch.l.Infof("Batch: Wrote %d samples in %s.", len(data.Timeseries), time.Since(start))
 	return nil
 }
 
