@@ -501,6 +501,6 @@ func convertTimeseriesToRequest(tsArray []prompb.TimeSeries) *prompb.WriteReques
 		// See:
 		// * https://github.com/open-telemetry/wg-prometheus/issues/10
 		// * https://github.com/open-telemetry/opentelemetry-collector/issues/2315
-		Timeseries: orderBySampleTimestamp(tsArray),
+		Timeseries: tsArray,
 	}
 }

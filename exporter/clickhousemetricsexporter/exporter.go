@@ -18,7 +18,6 @@ package clickhousemetricsexporter
 import (
 	"context"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -39,7 +38,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-const maxBatchByteSize = 90000000
+const maxBatchByteSize = 1024000
 
 // PrwExporter converts OTLP metrics to Prometheus remote write TimeSeries and sends them to a remote endpoint.
 type PrwExporter struct {
@@ -271,7 +270,7 @@ func (prwe *PrwExporter) export(ctx context.Context, tsMap map[string]*prompb.Ti
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	concurrencyLimit := int(math.Min(float64(prwe.concurrency), float64(len(requests))))
+	concurrencyLimit := len(requests)
 	wg.Add(concurrencyLimit) // used to wait for workers to be finished
 
 	// Run concurrencyLimit of workers until there

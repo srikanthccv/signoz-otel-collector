@@ -303,6 +303,7 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 		return err
 	}
 
+	start_1 := time.Now()
 	err = func() error {
 		ctx := context.Background()
 
@@ -334,6 +335,7 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 	if err != nil {
 		return err
 	}
+	ch.l.Info("Write took ", time.Since(start), " ", time.Since(start_1), "\n")
 
 	n := len(newTimeSeries)
 	if n != 0 {
