@@ -82,30 +82,26 @@ func NewClickHouse(params *ClickHouseParams) (base.Storage, error) {
 	queries = append(queries, fmt.Sprintf(`CREATE DATABASE IF NOT EXISTS %s`, database))
 
 	queries = append(queries, fmt.Sprintf(`
-		CREATE TABLE IF NOT EXISTS %s.samples_v2_json_string (
+		CREATE TABLE IF NOT EXISTS %s.samples_v2 (
 			metric_name LowCardinality(String),
 			fingerprint UInt64 Codec(DoubleDelta, LZ4),
-			timestamp_ms Int64 Codec(DoubleDelta, LZ4),
+			timestamp_ms Int64 Codec(Delta, LZ4),
 			value Float64 Codec(Gorilla, LZ4),
-			labels String Codec(ZSTD(2))
+			labels_keys Array(String) Codec(ZSTD(2)),
+			labels_values Array(String) Codec(ZSTD(2))
 		)
 		ENGINE = MergeTree
 			PARTITION BY toDate(timestamp_ms / 1000)
 			ORDER BY (metric_name, fingerprint, timestamp_ms)`, database))
 
-	queries = append(queries, `SET allow_experimental_object_type = 1`)
-
-	// reading and writing of JSON object are not yet supported
-	// in clickhouse-go. We workaround this limitation for now by
-	// using the DEFAULT expression. However, we can use labels_object
-	// in the querying for faster results.
 	queries = append(queries, fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS %s.time_series_v2 (
 			metric_name LowCardinality(String),
 			fingerprint UInt64 Codec(DoubleDelta, LZ4),
 			timestamp_ms Int64 Codec(DoubleDelta, LZ4),
-			labels String Codec(ZSTD(5)),
-			labels_object JSON DEFAULT labels CODEC(ZSTD(5))
+			labels Map(String, String) CODEC(ZSTD(1)),
+			INDEX idx_labels_keys mapKeys(labels) TYPE ngrambf_v1(4, 1024, 3, 0) GRANULARITY 1,
+			INDEX idx_labels_values mapValues(labels) TYPE ngrambf_v1(4, 1024, 3, 0) GRANULARITY 1
 		)
 		ENGINE = ReplacingMergeTree
 			PARTITION BY toDate(timestamp_ms / 1000)
@@ -259,23 +255,22 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 	}
 
 	// find new time series
-	newTimeSeries := make(map[uint64][]*prompb.Label)
+	newTimeSeries := make(map[uint64]map[string]string)
 	ch.timeSeriesRW.Lock()
 	for f, m := range timeSeries {
 		_, ok := ch.timeSeries[f]
 		if !ok {
 			ch.timeSeries[f] = struct{}{}
-			newTimeSeries[f] = m
+			newTimeSeries[f] = make(map[string]string)
+			for _, l := range m {
+				newTimeSeries[f][l.Name] = l.Value
+			}
 		}
 	}
 	ch.timeSeriesRW.Unlock()
 
 	err := func() error {
 		ctx := context.Background()
-		err := ch.conn.Exec(ctx, `SET allow_experimental_object_type = 1`)
-		if err != nil {
-			return err
-		}
 
 		statement, err := ch.conn.PrepareBatch(ctx, fmt.Sprintf("INSERT INTO %s.time_series_v2 (metric_name, timestamp_ms, fingerprint, labels) VALUES (?, ?, ?, ?)", ch.database))
 		if err != nil {
@@ -283,12 +278,11 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 		}
 		timestamp := model.Now().Time().UnixMilli()
 		for fingerprint, labels := range newTimeSeries {
-			encodedLabels := string(marshalLabels(labels, make([]byte, 0, 128)))
 			err = statement.Append(
 				fingerprintToName[fingerprint],
 				timestamp,
 				fingerprint,
-				encodedLabels,
+				labels,
 			)
 			if err != nil {
 				return err
@@ -303,25 +297,30 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 		return err
 	}
 
-	start_1 := time.Now()
 	err = func() error {
 		ctx := context.Background()
 
-		statement, err := ch.conn.PrepareBatch(ctx, fmt.Sprintf("INSERT INTO %s.samples_v2_json_string", ch.database))
+		statement, err := ch.conn.PrepareBatch(ctx, fmt.Sprintf("INSERT INTO %s.samples_v2", ch.database))
 		if err != nil {
 			return err
 		}
 		for i, ts := range data.Timeseries {
 			fingerprint := fingerprints[i]
 			labels := timeSeries[fingerprint]
-			encodedLabels := string(marshalLabels(labels, make([]byte, 0, 128)))
+			labelsKeys := make([]string, len(labels))
+			labelsValues := make([]string, len(labels))
+			for i, l := range labels {
+				labelsKeys[i] = l.Name
+				labelsValues[i] = l.Value
+			}
 			for _, s := range ts.Samples {
 				err = statement.Append(
 					fingerprintToName[fingerprint],
 					fingerprint,
 					s.Timestamp,
 					s.Value,
-					encodedLabels,
+					labelsKeys,
+					labelsValues,
 				)
 				if err != nil {
 					return err
@@ -335,7 +334,6 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 	if err != nil {
 		return err
 	}
-	ch.l.Info("Write took ", time.Since(start), " ", time.Since(start_1), "\n")
 
 	n := len(newTimeSeries)
 	if n != 0 {
