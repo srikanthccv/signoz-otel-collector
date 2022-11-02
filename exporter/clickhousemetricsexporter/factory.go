@@ -98,7 +98,7 @@ func createDefaultConfig() config.Exporter {
 		RemoteWriteQueue: RemoteWriteQueue{
 			Enabled:      true,
 			QueueSize:    10000,
-			NumConsumers: 5,
+			NumConsumers: 10,
 		},
 	}
 }
