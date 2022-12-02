@@ -32,6 +32,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	CLUSTER                = "cluster"
+	DISTRIBUTED_LOGS_TABLE = "distributed_logs"
+)
+
 type clickhouseLogsExporter struct {
 	db            clickhouse.Conn
 	insertLogsSQL string
@@ -95,7 +100,7 @@ func (e *clickhouseLogsExporter) pushLogsData(ctx context.Context, ld plog.Logs)
 					e.ksuid.String(),
 					r.TraceID().HexString(),
 					r.SpanID().HexString(),
-					r.Flags(),
+					uint32(r.Flags()),
 					r.SeverityText(),
 					uint8(r.SeverityNumber()),
 					r.Body().AsString(),
@@ -141,13 +146,13 @@ func attributesToSlice(attributes pcommon.Map, forceStringValues bool) (response
 			response.StringKeys = append(response.StringKeys, formatKey(k))
 			response.StringValues = append(response.StringValues, v.AsString())
 		} else {
-			switch v.Type().String() {
-			case "INT":
+			switch v.Type() {
+			case pcommon.ValueTypeInt:
 				response.IntKeys = append(response.IntKeys, formatKey(k))
-				response.IntValues = append(response.IntValues, v.IntVal())
-			case "DOUBLE":
+				response.IntValues = append(response.IntValues, v.Int())
+			case pcommon.ValueTypeDouble:
 				response.FloatKeys = append(response.FloatKeys, formatKey(k))
-				response.FloatValues = append(response.FloatValues, v.DoubleVal())
+				response.FloatValues = append(response.FloatValues, v.Double())
 			default: // store it as string
 				response.StringKeys = append(response.StringKeys, formatKey(k))
 				response.StringValues = append(response.StringValues, v.AsString())
@@ -230,7 +235,7 @@ func newClickhouseClient(logger *zap.Logger, cfg *Config) (clickhouse.Conn, erro
 		return nil, err
 	}
 
-	q := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", databaseName)
+	q := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s ON CLUSTER %s;", databaseName, CLUSTER)
 	err = db.Exec(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create database, err: %s", err)
@@ -282,13 +287,13 @@ func buildClickhouseMigrateURL(cfg *Config) (string, error) {
 	password := paramMap["password"]
 
 	if len(username) > 0 && len(password) > 0 {
-		clickhouseUrl = fmt.Sprintf("clickhouse://%s:%s@%s/%s?x-multi-statement=true", username[0], password[0], host, databaseName)
+		clickhouseUrl = fmt.Sprintf("clickhouse://%s:%s@%s/%s?x-multi-statement=true&x-cluster-name=%s&x-migrations-table=schema_migrations&x-migrations-table-engine=MergeTree", username[0], password[0], host, databaseName, CLUSTER)
 	} else {
-		clickhouseUrl = fmt.Sprintf("clickhouse://%s/%s?x-multi-statement=true", host, databaseName)
+		clickhouseUrl = fmt.Sprintf("clickhouse://%s/%s?x-multi-statement=true&x-cluster-name=%s&x-migrations-table=schema_migrations&x-migrations-table-engine=MergeTree", host, databaseName, CLUSTER)
 	}
 	return clickhouseUrl, nil
 }
 
 func renderInsertLogsSQL(cfg *Config) string {
-	return fmt.Sprintf(insertLogsSQLTemplate, databaseName, tableName)
+	return fmt.Sprintf(insertLogsSQLTemplate, databaseName, DISTRIBUTED_LOGS_TABLE)
 }

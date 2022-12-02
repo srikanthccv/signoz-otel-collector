@@ -126,15 +126,15 @@ func TestPrometheusRemoteWriteReceiver(t *testing.T) {
 	require.Equal(t, http.StatusAccepted, r)
 	require.Equal(t, 4, cms.AllMetrics()[0].ResourceMetrics().Len())
 
-	require.Equal(t, pmetric.MetricDataTypeSum, cms.AllMetrics()[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).DataType())
+	require.Equal(t, pmetric.MetricTypeSum, cms.AllMetrics()[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Type())
 	require.Equal(t, true, cms.AllMetrics()[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Sum().IsMonotonic())
-	require.Equal(t, pmetric.MetricAggregationTemporalityCumulative, cms.AllMetrics()[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Sum().AggregationTemporality())
+	require.Equal(t, pmetric.AggregationTemporalityCumulative, cms.AllMetrics()[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Sum().AggregationTemporality())
 
-	require.Equal(t, pmetric.MetricDataTypeSum, cms.AllMetrics()[0].ResourceMetrics().At(1).ScopeMetrics().At(0).Metrics().At(0).DataType())
+	require.Equal(t, pmetric.MetricTypeSum, cms.AllMetrics()[0].ResourceMetrics().At(1).ScopeMetrics().At(0).Metrics().At(0).Type())
 	require.Equal(t, true, cms.AllMetrics()[0].ResourceMetrics().At(1).ScopeMetrics().At(0).Metrics().At(0).Sum().IsMonotonic())
-	require.Equal(t, pmetric.MetricAggregationTemporalityCumulative, cms.AllMetrics()[0].ResourceMetrics().At(1).ScopeMetrics().At(0).Metrics().At(0).Sum().AggregationTemporality())
+	require.Equal(t, pmetric.AggregationTemporalityCumulative, cms.AllMetrics()[0].ResourceMetrics().At(1).ScopeMetrics().At(0).Metrics().At(0).Sum().AggregationTemporality())
 
-	require.Equal(t, pmetric.MetricDataTypeGauge, cms.AllMetrics()[0].ResourceMetrics().At(2).ScopeMetrics().At(0).Metrics().At(0).DataType())
+	require.Equal(t, pmetric.MetricTypeGauge, cms.AllMetrics()[0].ResourceMetrics().At(2).ScopeMetrics().At(0).Metrics().At(0).Type())
 
-	require.Equal(t, pmetric.MetricDataTypeNone, cms.AllMetrics()[0].ResourceMetrics().At(3).ScopeMetrics().At(0).Metrics().At(0).DataType())
+	require.Equal(t, pmetric.MetricTypeEmpty, cms.AllMetrics()[0].ResourceMetrics().At(3).ScopeMetrics().At(0).Metrics().At(0).Type())
 }

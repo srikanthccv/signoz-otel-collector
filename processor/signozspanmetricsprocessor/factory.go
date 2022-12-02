@@ -32,18 +32,18 @@ func NewFactory() component.ProcessorFactory {
 	return component.NewProcessorFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithTracesProcessor(createTracesProcessor),
+		component.WithTracesProcessor(createTracesProcessor, component.StabilityLevelUndefined),
 	)
 }
 
-func createDefaultConfig() config.Processor {
+func createDefaultConfig() component.ProcessorConfig {
 	return &Config{
-		ProcessorSettings:      config.NewProcessorSettings(config.NewComponentID(typeStr)),
+		ProcessorSettings:      config.NewProcessorSettings(component.NewID(typeStr)),
 		AggregationTemporality: "AGGREGATION_TEMPORALITY_CUMULATIVE",
 		DimensionsCacheSize:    defaultDimensionsCacheSize,
 	}
 }
 
-func createTracesProcessor(_ context.Context, params component.ProcessorCreateSettings, cfg config.Processor, nextConsumer consumer.Traces) (component.TracesProcessor, error) {
+func createTracesProcessor(_ context.Context, params component.ProcessorCreateSettings, cfg component.ProcessorConfig, nextConsumer consumer.Traces) (component.TracesProcessor, error) {
 	return newProcessor(params.Logger, cfg, nextConsumer)
 }

@@ -20,6 +20,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/config/configauth"
 	"go.opentelemetry.io/collector/config/confighttp"
@@ -32,17 +33,17 @@ func TestLoadConfig(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		id       config.ComponentID
-		expected config.Receiver
+		id       component.ID
+		expected component.ReceiverConfig
 	}{
 		{
-			id:       config.NewComponentIDWithName(typeStr, "defaults"),
+			id:       component.NewIDWithName(typeStr, "defaults"),
 			expected: createDefaultConfig(),
 		},
 		{
-			id: config.NewComponentIDWithName(typeStr, ""),
+			id: component.NewIDWithName(typeStr, ""),
 			expected: &Config{
-				ReceiverSettings: config.NewReceiverSettings(config.NewComponentID("prometheusremotewrite")),
+				ReceiverSettings: config.NewReceiverSettings(component.NewID("prometheusremotewrite")),
 				HTTPServerSettings: confighttp.HTTPServerSettings{
 					Endpoint:           "0.0.0.0:19291",
 					TLSSetting:         (*configtls.TLSServerSetting)(nil),
@@ -62,7 +63,7 @@ func TestLoadConfig(t *testing.T) {
 
 			sub, err := cm.Sub(tt.id.String())
 			require.NoError(t, err)
-			require.NoError(t, config.UnmarshalReceiver(sub, cfg))
+			require.NoError(t, component.UnmarshalReceiverConfig(sub, cfg))
 			assert.NoError(t, cfg.Validate())
 			assert.Equal(t, tt.expected, cfg)
 		})

@@ -59,15 +59,20 @@ type PrometheusRemoteWriteReceiver struct {
 
 // NewReceiver - remote write
 func NewReceiver(params component.ReceiverCreateSettings, config *Config, consumer consumer.Metrics) (*PrometheusRemoteWriteReceiver, error) {
+	obsrecv, err := obsreport.NewReceiver(obsreport.ReceiverSettings{
+		ReceiverID:             config.ID(),
+		ReceiverCreateSettings: params,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	zr := &PrometheusRemoteWriteReceiver{
 		params:       params,
 		nextConsumer: consumer,
 		config:       config,
 		logger:       params.Logger,
-		obsrecv: obsreport.NewReceiver(obsreport.ReceiverSettings{
-			ReceiverID:             config.ID(),
-			ReceiverCreateSettings: params,
-		}),
+		obsrecv:      obsrecv,
 	}
 	return zr, nil
 }
@@ -143,7 +148,7 @@ func (rec *PrometheusRemoteWriteReceiver) ServeHTTP(w http.ResponseWriter, r *ht
 
 		for _, s := range ts.Samples {
 			ppoint := pmetric.NewNumberDataPoint()
-			ppoint.SetDoubleVal(s.Value)
+			ppoint.SetDoubleValue(s.Value)
 			ppoint.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(0, s.Timestamp*int64(time.Millisecond))))
 			if ppoint.Timestamp().AsTime().Before(timeThreshold) {
 				rec.logger.Debug("Metric older than the threshold", zap.String("metric name", pm.Name()), zap.Time("metric_timestamp", ppoint.Timestamp().AsTime()))
@@ -154,21 +159,21 @@ func (rec *PrometheusRemoteWriteReceiver) ServeHTTP(w http.ResponseWriter, r *ht
 				if l.Name == "__name__" {
 					labelName = "key_name"
 				}
-				ppoint.Attributes().UpsertString(labelName, l.Value)
+				ppoint.Attributes().PutStr(labelName, l.Value)
 			}
 			if IsValidCumulativeSuffix(metricsType) {
-				pm.SetDataType(pmetric.MetricDataTypeSum)
+				pm.SetEmptySum()
 				pm.Sum().SetIsMonotonic(true)
-				pm.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+				pm.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 				ppoint.CopyTo(pm.Sum().DataPoints().AppendEmpty())
 			} else {
-				pm.SetDataType(pmetric.MetricDataTypeGauge)
+				pm.SetEmptyGauge()
 				ppoint.CopyTo(pm.Gauge().DataPoints().AppendEmpty())
 			}
 			rec.logger.Debug("Metric sample",
 				zap.String("metric_name", pm.Name()),
 				zap.String("metric_unit", pm.Unit()),
-				zap.Float64("metric_value", ppoint.DoubleVal()),
+				zap.Float64("metric_value", ppoint.DoubleValue()),
 				zap.Time("metric_timestamp", ppoint.Timestamp().AsTime()),
 				zap.String("metric_labels", fmt.Sprintf("%#v", ppoint.Attributes())),
 			)

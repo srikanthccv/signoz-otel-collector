@@ -34,12 +34,12 @@ func NewFactory() component.ReceiverFactory {
 	return component.NewReceiverFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithMetricsReceiver(createMetricsReceiver))
+		component.WithMetricsReceiver(createMetricsReceiver, component.StabilityLevelUndefined))
 }
 
-func createDefaultConfig() config.Receiver {
+func createDefaultConfig() component.ReceiverConfig {
 	return &Config{
-		ReceiverSettings: config.NewReceiverSettings(config.NewComponentID(typeStr)),
+		ReceiverSettings: config.NewReceiverSettings(component.NewID(typeStr)),
 		HTTPServerSettings: confighttp.HTTPServerSettings{
 			Endpoint: defaultBindEndpoint,
 		},
@@ -51,7 +51,7 @@ func createDefaultConfig() config.Receiver {
 func createMetricsReceiver(
 	ctx context.Context,
 	params component.ReceiverCreateSettings,
-	cfg config.Receiver,
+	cfg component.ReceiverConfig,
 	consumer consumer.Metrics,
 ) (component.MetricsReceiver, error) {
 	rCfg := cfg.(*Config)

@@ -36,11 +36,11 @@ func NewFactory() component.ExporterFactory {
 	return component.NewExporterFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithMetricsExporter(createMetricsExporter))
+		component.WithMetricsExporter(createMetricsExporter, component.StabilityLevelUndefined))
 }
 
-func createMetricsExporter(_ context.Context, set component.ExporterCreateSettings,
-	cfg config.Exporter) (component.MetricsExporter, error) {
+func createMetricsExporter(ctx context.Context, set component.ExporterCreateSettings,
+	cfg component.ExporterConfig) (component.MetricsExporter, error) {
 
 	prwCfg, ok := cfg.(*Config)
 	if !ok {
@@ -53,8 +53,9 @@ func createMetricsExporter(_ context.Context, set component.ExporterCreateSettin
 	}
 
 	exporter, err := exporterhelper.NewMetricsExporter(
-		cfg,
+		ctx,
 		set,
+		cfg,
 		prwe.PushMetrics,
 		exporterhelper.WithTimeout(prwCfg.TimeoutSettings),
 		exporterhelper.WithQueue(exporterhelper.QueueSettings{
@@ -74,9 +75,9 @@ func createMetricsExporter(_ context.Context, set component.ExporterCreateSettin
 	return resourcetotelemetry.WrapMetricsExporter(prwCfg.ResourceToTelemetrySettings, exporter), nil
 }
 
-func createDefaultConfig() config.Exporter {
+func createDefaultConfig() component.ExporterConfig {
 	return &Config{
-		ExporterSettings: config.NewExporterSettings(config.NewComponentID(typeStr)),
+		ExporterSettings: config.NewExporterSettings(component.NewID(typeStr)),
 		Namespace:        "",
 		ExternalLabels:   map[string]string{},
 		TimeoutSettings:  exporterhelper.NewDefaultTimeoutSettings(),

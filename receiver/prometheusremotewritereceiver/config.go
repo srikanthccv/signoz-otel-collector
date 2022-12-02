@@ -15,6 +15,7 @@
 package prometheusremotewritereceiver
 
 import (
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/config/confighttp"
 )
@@ -26,4 +27,4 @@ type Config struct {
 	TimeThreshold                 int64 `mapstructure:"time_threshold"`
 }
 
-var _ config.Receiver = (*Config)(nil)
+var _ component.ReceiverConfig = (*Config)(nil)
