@@ -272,16 +272,13 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 	}
 
 	// find new time series
-	newTimeSeries := make(map[uint64]map[string]string)
+	newTimeSeries := make(map[uint64][]*prompb.Label)
 	ch.timeSeriesRW.Lock()
 	for f, m := range timeSeries {
 		_, ok := ch.timeSeries[f]
 		if !ok {
 			ch.timeSeries[f] = struct{}{}
-			newTimeSeries[f] = make(map[string]string)
-			for _, l := range m {
-				newTimeSeries[f][l.Name] = l.Value
-			}
+			newTimeSeries[f] = m
 		}
 	}
 	ch.timeSeriesRW.Unlock()
@@ -295,11 +292,12 @@ func (ch *clickHouse) Write(ctx context.Context, data *prompb.WriteRequest) erro
 		}
 		timestamp := model.Now().Time().UnixMilli()
 		for fingerprint, labels := range newTimeSeries {
+			encodedLabels := string(marshalLabels(labels, make([]byte, 0, 128)))
 			err = statement.Append(
 				fingerprintToName[fingerprint],
 				timestamp,
 				fingerprint,
-				labels,
+				encodedLabels,
 			)
 			if err != nil {
 				return err
